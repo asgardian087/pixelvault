@@ -1,9 +1,13 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DIP Record</title>
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
 
     <style>
         * {
@@ -23,15 +27,41 @@
         }
 
         .pdf-page {
+            position: relative;
             margin: 12px auto;
             background: white;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
         }
 
-        canvas {
+        .pdf-page canvas {
             display: block;
             width: 100%;
-            height: auto;
+            height: 100%;
+        }
+
+        .textLayer {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            line-height: 1;
+            text-align: initial;
+            transform-origin: 0 0;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .textLayer span,
+        .textLayer br {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0 0;
+        }
+
+        .textLayer ::selection {
+            background: rgba(0, 100, 255, 0.35);
         }
 
         #status {
@@ -47,6 +77,7 @@
     <main id="pdf-content"></main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.js"></script>
 
     <script>
         const pdfFile = "./areu.pdf";
@@ -60,7 +91,6 @@
 
             try {
                 const pdf = await pdfjsLib.getDocument(pdfFile).promise;
-
                 status.textContent = "";
 
                 const observer = new IntersectionObserver(entries => {
@@ -83,9 +113,13 @@
                     pageContainer.style.aspectRatio = "210 / 297";
 
                     const canvas = document.createElement("canvas");
-                    canvas.dataset.pageNumber = pageNumber;
+                    const textLayer = document.createElement("div");
+
+                    textLayer.className = "textLayer";
+                    textLayer.setAttribute("aria-label", "Selectable page text");
 
                     pageContainer.appendChild(canvas);
+                    pageContainer.appendChild(textLayer);
                     container.appendChild(pageContainer);
 
                     observer.observe(pageContainer);
@@ -100,7 +134,11 @@
 
         async function renderPage(pageContainer, pdf) {
             const canvas = pageContainer.querySelector("canvas");
-            const pageNumber = Number(canvas.dataset.pageNumber);
+            const textLayerDiv = pageContainer.querySelector(".textLayer");
+
+            const pageNumber = Array.from(
+                document.querySelectorAll(".pdf-page")
+            ).indexOf(pageContainer) + 1;
 
             try {
                 const page = await pdf.getPage(pageNumber);
@@ -114,15 +152,34 @@
                 const viewport = page.getViewport({ scale: scale });
                 const context = canvas.getContext("2d");
 
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                canvas.style.aspectRatio =
+                canvas.width = Math.floor(viewport.width);
+                canvas.height = Math.floor(viewport.height);
+
+                canvas.style.width = "100%";
+                canvas.style.height = "100%";
+
+                pageContainer.style.aspectRatio =
                     `${viewport.width} / ${viewport.height}`;
+
+                textLayerDiv.replaceChildren();
+                textLayerDiv.style.width = `${viewport.width}px`;
+                textLayerDiv.style.height = `${viewport.height}px`;
+                textLayerDiv.style.setProperty("--scale-factor", scale);
 
                 await page.render({
                     canvasContext: context,
                     viewport: viewport
                 }).promise;
+
+                const textContent = await page.getTextContent();
+
+                const textLayer = new pdfjsLib.TextLayer({
+                    textContentSource: textContent,
+                    container: textLayerDiv,
+                    viewport: viewport
+                });
+
+                await textLayer.render();
 
             } catch (error) {
                 console.error("Error rendering page:", pageNumber, error);
@@ -134,3 +191,4 @@
 
 </body>
 </html>
+```
