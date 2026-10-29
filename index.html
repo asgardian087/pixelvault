@@ -3,10 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIP Record</title>
-
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
+    <title>My PDF Viewer</title>
 
     <style>
         * {
@@ -15,179 +12,67 @@
 
         body {
             margin: 0;
-            background: #e5e5e5;
             font-family: Arial, sans-serif;
+            background: #f1f1f1;
         }
 
-        #pdf-content {
+        header {
+            padding: 15px;
+            background: #222;
+            color: white;
+            text-align: center;
+        }
+
+        main {
+            padding: 15px;
+        }
+
+        .pdf-container {
             width: 100%;
-            max-width: 1000px;
-            margin: auto;
-        }
-
-        .pdf-page {
-            position: relative;
-            margin: 12px auto;
+            height: 85vh;
+            min-height: 500px;
             background: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            border: 1px solid #ccc;
+            border-radius: 6px;
             overflow: hidden;
         }
 
-        .pdf-page canvas {
+        iframe {
             display: block;
             width: 100%;
             height: 100%;
+            border: none;
         }
 
-        .textLayer {
-            position: absolute;
-            inset: 0;
-            overflow: hidden;
-            line-height: 1;
-            text-align: initial;
-            transform-origin: 0 0;
-            user-select: text;
-            -webkit-user-select: text;
-        }
-
-        .textLayer span,
-        .textLayer br {
-            color: transparent;
-            position: absolute;
-            white-space: pre;
-            cursor: text;
-            transform-origin: 0 0;
-        }
-
-        .textLayer ::selection {
-            background: rgba(0, 100, 255, 0.35);
-        }
-
-        #status {
-            padding: 20px;
+        .fallback {
+            margin-top: 12px;
             text-align: center;
+        }
+
+        .fallback a {
+            color: #075bc8;
         }
     </style>
 </head>
 
 <body>
+    <header>
+        <h2>My PDF Viewer</h2>
+    </header>
 
-    <div id="status">Loading document...</div>
-    <main id="pdf-content"></main>
+    <main>
+        <div class="pdf-container">
+            <iframe
+                src="./areu.pdf"
+                title="PDF document viewer">
+            </iframe>
+        </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.js"></script>
-
-    <script>
-        const pdfFile = "./areu.pdf";
-
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
-        async function displayPDF() {
-            const status = document.getElementById("status");
-            const container = document.getElementById("pdf-content");
-
-            try {
-                const pdf = await pdfjsLib.getDocument(pdfFile).promise;
-                status.textContent = "";
-
-                const observer = new IntersectionObserver(entries => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            observer.unobserve(entry.target);
-                            renderPage(entry.target, pdf);
-                        }
-                    });
-                }, {
-                    rootMargin: "500px"
-                });
-
-                for (let pageNumber = 1;
-                     pageNumber <= pdf.numPages;
-                     pageNumber++) {
-
-                    const pageContainer = document.createElement("div");
-                    pageContainer.className = "pdf-page";
-                    pageContainer.style.aspectRatio = "210 / 297";
-
-                    const canvas = document.createElement("canvas");
-                    const textLayer = document.createElement("div");
-
-                    textLayer.className = "textLayer";
-                    textLayer.setAttribute("aria-label", "Selectable page text");
-
-                    pageContainer.appendChild(canvas);
-                    pageContainer.appendChild(textLayer);
-                    container.appendChild(pageContainer);
-
-                    observer.observe(pageContainer);
-                }
-
-            } catch (error) {
-                status.textContent =
-                    "Unable to load the document. Please check the PDF filename.";
-                console.error(error);
-            }
-        }
-
-        async function renderPage(pageContainer, pdf) {
-            const canvas = pageContainer.querySelector("canvas");
-            const textLayerDiv = pageContainer.querySelector(".textLayer");
-
-            const pageNumber = Array.from(
-                document.querySelectorAll(".pdf-page")
-            ).indexOf(pageContainer) + 1;
-
-            try {
-                const page = await pdf.getPage(pageNumber);
-                const baseViewport = page.getViewport({ scale: 1 });
-
-                const scale = Math.min(
-                    pageContainer.clientWidth / baseViewport.width,
-                    2
-                );
-
-                const viewport = page.getViewport({ scale: scale });
-                const context = canvas.getContext("2d");
-
-                canvas.width = Math.floor(viewport.width);
-                canvas.height = Math.floor(viewport.height);
-
-                canvas.style.width = "100%";
-                canvas.style.height = "100%";
-
-                pageContainer.style.aspectRatio =
-                    `${viewport.width} / ${viewport.height}`;
-
-                textLayerDiv.replaceChildren();
-                textLayerDiv.style.width = `${viewport.width}px`;
-                textLayerDiv.style.height = `${viewport.height}px`;
-                textLayerDiv.style.setProperty("--scale-factor", scale);
-
-                await page.render({
-                    canvasContext: context,
-                    viewport: viewport
-                }).promise;
-
-                const textContent = await page.getTextContent();
-
-                const textLayer = new pdfjsLib.TextLayer({
-                    textContentSource: textContent,
-                    container: textLayerDiv,
-                    viewport: viewport
-                });
-
-                await textLayer.render();
-
-            } catch (error) {
-                console.error("Error rendering page:", pageNumber, error);
-            }
-        }
-
-        displayPDF();
-    </script>
-
+        <div class="fallback">
+            <a href="./areu.pdf" target="_blank" rel="noopener">
+                Open PDF separately if the viewer does not work
+            </a>
+        </div>
+    </main>
 </body>
 </html>
-
