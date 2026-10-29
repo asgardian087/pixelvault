@@ -3,23 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NLP Notes</title>
+    <title>DIP Record</title>
+
     <style>
-        html, body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
+        * {
+            box-sizing: border-box;
         }
 
-        iframe {
+        body {
+            margin: 0;
+            background: #e5e5e5;
+            font-family: Arial, sans-serif;
+        }
+
+        #pdf-content {
             width: 100%;
-            height: 100%;
-            border: none;
+            max-width: 1000px;
+            margin: auto;
+        }
+
+        .pdf-page {
+            margin: 12px auto;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        #status {
+            padding: 20px;
+            text-align: center;
         }
     </style>
 </head>
+
 <body>
-    <iframe src="Nlpnote.pdf" title="NLP Notes PDF"></iframe>
+
+    <div id="status">Loading document...</div>
+    <main id="pdf-content"></main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <script>
+        const pdfFile = "./areu.pdf";
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+        async function displayPDF() {
+            const status = document.getElementById("status");
+            const container = document.getElementById("pdf-content");
+
+            try {
+                const pdf = await pdfjsLib.getDocument(pdfFile).promise;
+
+                status.textContent = "";
+
+                const observer = new IntersectionObserver(entries => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            observer.unobserve(entry.target);
+                            renderPage(entry.target, pdf);
+                        }
+                    });
+                }, {
+                    rootMargin: "500px"
+                });
+
+                for (let pageNumber = 1;
+                     pageNumber <= pdf.numPages;
+                     pageNumber++) {
+
+                    const pageContainer = document.createElement("div");
+                    pageContainer.className = "pdf-page";
+                    pageContainer.style.aspectRatio = "210 / 297";
+
+                    const canvas = document.createElement("canvas");
+                    canvas.dataset.pageNumber = pageNumber;
+
+                    pageContainer.appendChild(canvas);
+                    container.appendChild(pageContainer);
+
+                    observer.observe(pageContainer);
+                }
+
+            } catch (error) {
+                status.textContent =
+                    "Unable to load the document. Please check the PDF filename.";
+                console.error(error);
+            }
+        }
+
+        async function renderPage(pageContainer, pdf) {
+            const canvas = pageContainer.querySelector("canvas");
+            const pageNumber = Number(canvas.dataset.pageNumber);
+
+            try {
+                const page = await pdf.getPage(pageNumber);
+                const baseViewport = page.getViewport({ scale: 1 });
+
+                const scale = Math.min(
+                    pageContainer.clientWidth / baseViewport.width,
+                    2
+                );
+
+                const viewport = page.getViewport({ scale: scale });
+                const context = canvas.getContext("2d");
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                canvas.style.aspectRatio =
+                    `${viewport.width} / ${viewport.height}`;
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+
+            } catch (error) {
+                console.error("Error rendering page:", pageNumber, error);
+            }
+        }
+
+        displayPDF();
+    </script>
+
 </body>
 </html>
