@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My PDF Viewer</title>
 
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
+
     <style>
         * {
             box-sizing: border-box;
@@ -13,66 +16,206 @@
         body {
             margin: 0;
             font-family: Arial, sans-serif;
-            background: #f1f1f1;
+            background: #eaeaea;
         }
 
         header {
-            padding: 15px;
             background: #222;
             color: white;
+            padding: 15px;
             text-align: center;
         }
 
-        main {
-            padding: 15px;
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            background: #333;
+            color: white;
         }
 
-        .pdf-container {
-            width: 100%;
-            height: 85vh;
-            min-height: 500px;
+        button {
+            padding: 7px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #pdf-viewer {
+            height: calc(100vh - 125px);
+            overflow: auto;
+            padding: 15px 8px;
+        }
+
+        .pdf-page {
+            position: relative;
+            margin: 0 auto 15px;
             background: white;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            overflow: hidden;
+            box-shadow: 0 2px 8px #999;
         }
 
-        iframe {
+        .pdf-page canvas {
             display: block;
             width: 100%;
             height: 100%;
-            border: none;
         }
 
-        .fallback {
-            margin-top: 12px;
+        .textLayer {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            line-height: 1;
+            text-align: initial;
+            transform-origin: 0 0;
+            user-select: text;
+            -webkit-user-select: text;
+            pointer-events: auto;
+        }
+
+        .textLayer span,
+        .textLayer br {
+            position: absolute;
+            color: transparent;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0 0;
+        }
+
+        .textLayer ::selection {
+            background: rgba(0, 100, 255, 0.35);
+        }
+
+        #status {
+            padding: 12px;
             text-align: center;
-        }
-
-        .fallback a {
-            color: #075bc8;
         }
     </style>
 </head>
 
 <body>
-    <header>
-        <h2>My PDF Viewer</h2>
-    </header>
 
-    <main>
-        <div class="pdf-container">
-            <iframe
-                src="./areu.pdf"
-                title="PDF document viewer">
-            </iframe>
-        </div>
+<header>
+    <h2>My PDF Viewer</h2>
+</header>
 
-        <div class="fallback">
-            <a href="./areu.pdf" target="_blank" rel="noopener">
-                Open PDF separately if the viewer does not work
-            </a>
-        </div>
-    </main>
+<div class="toolbar">
+    <button id="zoom-out">−</button>
+    <span id="zoom-level">100%</span>
+    <button id="zoom-in">+</button>
+</div>
+
+<div id="status">Loading PDF...</div>
+<div id="pdf-viewer"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const pdfUrl = "./areu.pdf";
+    const viewer = document.getElementById("pdf-viewer");
+    const status = document.getElementById("status");
+    const zoomLabel = document.getElementById("zoom-level");
+
+    let pdfDocument;
+    let zoom = 1;
+    let rendering = false;
+
+    async function renderPDF() {
+        if (!pdfDocument || rendering) return;
+
+        rendering = true;
+        viewer.innerHTML = "";
+        status.textContent = "Rendering PDF...";
+
+        try {
+            for (let pageNumber = 1;
+                 pageNumber <= pdfDocument.numPages;
+                 pageNumber++) {
+
+                const page = await pdfDocument.getPage(pageNumber);
+
+                const viewport = page.getViewport({ scale: zoom });
+
+                const pageContainer = document.createElement("div");
+                pageContainer.className = "pdf-page";
+                pageContainer.style.width = viewport.width + "px";
+                pageContainer.style.height = viewport.height + "px";
+
+                const canvas = document.createElement("canvas");
+                const context = canvas.getContext("2d");
+
+                canvas.width = Math.ceil(viewport.width);
+                canvas.height = Math.ceil(viewport.height);
+
+                const textLayer = document.createElement("div");
+                textLayer.className = "textLayer";
+                textLayer.style.width = viewport.width + "px";
+                textLayer.style.height = viewport.height + "px";
+
+                pageContainer.appendChild(canvas);
+                pageContainer.appendChild(textLayer);
+                viewer.appendChild(pageContainer);
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+
+                const textContent = await page.getTextContent();
+
+                const textTask = pdfjsLib.renderTextLayer({
+                    textContent: textContent,
+                    container: textLayer,
+                    viewport: viewport,
+                    textDivs: []
+                });
+
+                await textTask.promise;
+            }
+
+            status.textContent =
+                "PDF loaded. Select text to copy it.";
+        } catch (error) {
+            console.error(error);
+            status.textContent =
+                "Unable to display the PDF. Check the browser console.";
+        } finally {
+            rendering = false;
+        }
+    }
+
+    pdfjsLib.getDocument(pdfUrl).promise
+        .then(pdf => {
+            pdfDocument = pdf;
+            renderPDF();
+        })
+        .catch(error => {
+            console.error(error);
+            status.textContent =
+                "Unable to load areu.pdf. Check that it exists in your repository.";
+        });
+
+    document.getElementById("zoom-in").addEventListener("click", () => {
+        if (!pdfDocument || rendering || zoom >= 2) return;
+        zoom = Math.min(2, zoom + 0.1);
+        zoomLabel.textContent = Math.round(zoom * 100) + "%";
+        renderPDF();
+    });
+
+    document.getElementById("zoom-out").addEventListener("click", () => {
+        if (!pdfDocument || rendering || zoom <= 0.5) return;
+        zoom = Math.max(0.5, zoom - 0.1);
+        zoomLabel.textContent = Math.round(zoom * 100) + "%";
+        renderPDF();
+    });
+</script>
+
 </body>
 </html>
